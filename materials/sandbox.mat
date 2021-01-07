@@ -1,0 +1,144 @@
+// Simple lit material that defines 3 parameters:
+// - baseColor
+// - roughness
+// - metallic
+//
+// These parameters can be used by the application to change the appearance of the material.
+//
+// This source material must be compiled to a binary material using the matc tool.
+// The command used to compile this material is:
+// matc -p mobile -a opengl -o app/src/main/assets/lit.filamat app/src/materials/lit.mat
+//
+// See build.gradle for an example of how to compile materials automatically
+// Please refer to the documentation for more information about matc and the materials system.
+
+material {
+    name : sandbox,
+    // Dynamic lighting is enabled on this material
+    shadingModel : lit,
+    flipUV: false,
+
+    // We don't need to declare a "requires" array, lit materials
+    // always requires the "tangents" vertex attribute (the normal
+    // is required for lighting, tangent/bitangent for normal mapping
+    // and anisotropy)
+
+    // List of parameters exposed by this material
+    parameters : [
+        // The color must be passed in linear space, not sRGB
+        {
+            type : sampler2d,
+            name : baseColor
+        },
+        // Normal map RGB texture
+        {
+            type : sampler2d,
+            name : normal
+        },
+        {
+            type : sampler2d,
+            name : roughnessMetallic
+        },
+        {
+            type : float,
+            name : roughness
+        },
+        {
+            type : float,
+            name : metallic
+        }
+    ],
+    // To sample textures our material must declare that it requires
+    // a set of UV coordinates from the rendered mesh
+    requires: [
+        uv0
+    ]
+}
+
+// TODO: UV texture atlas stuff
+fragment {
+
+    float grid(vec2 fragCoord, float space, float gridWidth) {
+        vec2 p  = fragCoord - vec2(.5);
+        vec2 size = vec2(gridWidth - .5);
+
+        vec2 a1 = mod(p - size, space);
+        vec2 a2 = mod(p + size, space);
+        vec2 a = a2 - a1;
+
+        float g = min(a.x, a.y);
+        return clamp(g, 0., 1.0);
+    }
+
+    vec3 col(vec2 uv) {
+        bool isTop = step(.8,uv.y) > 0.;
+        bool isRight = step(.8,uv.x) > 0.;
+        bool isBottom = step(.2,uv.y) < 1.;
+        bool isLeft = step(.2,uv.x) < 1.;
+
+        if( isTop ) {
+            return vec3(.8,.8,.8);
+        }
+        if( isRight ) {
+            return vec3(1.,1.,.0);
+        }
+        if( isBottom ) {
+            return vec3(0.,1.,1.);
+        }
+        if( isLeft ) {
+            return vec3(.0,.0,1.);
+        }
+        return vec3(.8,.8,.8);
+    }
+
+    vec3 norm(vec2 uv) {
+        bool isTop = step(.9,uv.y) > 0.;
+        bool isRight = step(.9,uv.x) > 0.;
+        bool isBottom = step(.1,uv.y) < 1.;
+        bool isLeft = step(.1,uv.x) < 1.;
+
+        if( isTop ) {
+            return vec3(.51,.95,.95);
+        }
+        if( isRight ) {
+            return vec3(.85,.5,.85);
+        }
+        if( isBottom ) {
+            return vec3(.51,.14,.85);
+        }
+        if( isLeft ) {
+            return vec3(.14,.51,.85);
+        }
+        return vec3(.5,.5,1.);
+    }
+
+    void material(inout MaterialInputs material) {
+        // float3 wp = getWorldPosition() + getWorldOffset();
+
+        // The normal map must be set *before* calling prepareMaterial()
+        material.normal.xyz = texture(materialParams_normal, getUV0()).xyz * 2.0 - 1.0;
+        prepareMaterial(material);
+
+        // Potential debug help.
+        //vec3 col = col(getUV0());
+        //col *= grid(getUV0()*100., 20., 1.);
+        //material.baseColor = vec4(col,1.) ;
+
+        // Nothing fancy here, we simply copy the parameters
+        // material.baseColor.rgb = materialParams.baseColor;
+        // Or we get from texture
+        material.baseColor = texture(materialParams_baseColor, getUV0());
+        // Or we can hardcode, for tests.
+        // material.baseColor = vec4(0.6,0.6,0.6,1.0);
+
+        // Material wide, or
+        // material.roughness = materialParams.roughness;
+        // material.metallic = materialParams.metallic;
+
+        // Provided via texture
+        vec3 roughnessMetallic = texture(materialParams_roughnessMetallic, getUV0()).rgb;
+        material.roughness = 1.0; //roughnessMetallic.r;
+        material.metallic = roughnessMetallic.g;
+        // material.ambientOcclusion = aoRoughnessMetallic.b??;
+    }
+}
